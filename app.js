@@ -637,10 +637,10 @@ async function confirmDelete(tripId) {
 }
 
 // ================================================================
-// SETTINGS  (API key stored in localStorage)
+// SETTINGS  (Gemini API key stored in localStorage — free tier)
 // ================================================================
 function getApiKey() {
-  return localStorage.getItem('anthropic_api_key') || '';
+  return localStorage.getItem('gemini_api_key') || '';
 }
 
 function setupSettings() {
@@ -650,7 +650,7 @@ function setupSettings() {
   document.getElementById('saveApiKeyBtn').onclick = () => {
     const key = document.getElementById('apiKeyInput').value.trim();
     if (!key) { toast('Please paste your API key first'); return; }
-    localStorage.setItem('anthropic_api_key', key);
+    localStorage.setItem('gemini_api_key', key);
     closeSettings();
     toast('API key saved ✓');
   };
@@ -666,89 +666,73 @@ function closeSettings() {
 }
 
 // ================================================================
-// AI RECEIPT SCANNING
+// AI RECEIPT SCANNING  (Google Gemini — 100% free)
 // ================================================================
 async function scanReceipt() {
   const apiKey = getApiKey();
   if (!apiKey) {
     openSettings();
-    toast('Add your API key first to enable scanning');
+    toast('Add your free Google API key first');
     return;
   }
 
   const scanBtn    = document.getElementById('scanBtn');
   const scanStatus = document.getElementById('scanStatus');
 
-  scanBtn.disabled    = true;
-  scanBtn.textContent = '⏳ Reading your receipt…';
+  scanBtn.disabled     = true;
+  scanBtn.textContent  = '⏳ Reading your receipt…';
   scanStatus.className    = 'scan-status scanning';
-  scanStatus.textContent  = '✨ AI is reading your receipt — this takes about 10 seconds…';
+  scanStatus.textContent  = '✨ AI is reading your receipt — takes about 5 seconds…';
   scanStatus.style.display = 'block';
 
   try {
     const base64 = S.photo.split(',')[1];
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1500,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
-            },
-            {
-              type: 'text',
-              text: `Look at this grocery receipt and extract all the information. Return ONLY a valid JSON object — no explanation, no markdown, just raw JSON — in this exact format:
+
+    const prompt = `Look at this grocery receipt image and extract all the information.
+Return ONLY a valid JSON object with no explanation, no markdown, just raw JSON like this:
 {
-  "store": "store name as written on receipt, or null",
-  "date": "date in YYYY-MM-DD format, or null",
-  "total": total bill amount as a number without currency symbol or null,
+  "store": "store name or null",
+  "date": "YYYY-MM-DD or null",
+  "total": total as a plain number or null,
   "items": [
-    {
-      "name": "item name in plain English",
-      "quantity": quantity as a number or null,
-      "unit": one of kg/g/litre/ml/pcs/pack/dozen/bunch,
-      "pricePerUnit": price per unit as a number or null
-    }
+    { "name": "item name", "quantity": number or null, "unit": "kg/g/litre/ml/pcs/pack/dozen/bunch", "pricePerUnit": number or null }
   ]
 }
-Rules:
-- All prices must be plain numbers (no ₹ or Rs symbols)
-- For items sold by weight (e.g. Tomato 0.5kg @ ₹40/kg), set quantity=0.5, unit=kg, pricePerUnit=40
-- For items sold as pieces (e.g. 2 soaps @ ₹30 each), set quantity=2, unit=pcs, pricePerUnit=30
-- If you cannot read something clearly, use null
-- Today's date context: ${today()}`
-            }
-          ]
-        }]
-      })
-    });
+Rules: all prices as plain numbers (no ₹/Rs). For weight items (Tomato 0.5kg @ ₹40/kg) use quantity=0.5, unit=kg, pricePerUnit=40. For piece items (2 soaps @ ₹30) use quantity=2, unit=pcs, pricePerUnit=30. Use null if unclear. Date context: ${today()}`;
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1500 }
+        })
+      }
+    );
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       const msg = err?.error?.message || `Error ${res.status}`;
-      if (res.status === 401) throw new Error('Invalid API key. Please check it in Settings.');
+      if (res.status === 400 && msg.includes('API_KEY')) throw new Error('Invalid API key. Tap ⚙️ Settings to fix it.');
+      if (res.status === 403) throw new Error('API key not enabled. See setup steps in Settings.');
       throw new Error(msg);
     }
 
-    const data = await res.json();
-    const text = data.content[0].text.trim();
-
-    // Extract JSON from response
+    const data   = await res.json();
+    const text   = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Could not read the receipt clearly. Try a clearer photo.');
+
     const parsed = JSON.parse(jsonMatch[0]);
 
-    // Fill in the form
+    // Auto-fill the form
     if (parsed.store) document.getElementById('tripStore').value = parsed.store;
     if (parsed.date)  document.getElementById('tripDate').value  = parsed.date;
     if (parsed.total) document.getElementById('tripTotal').value = parsed.total;
@@ -766,11 +750,11 @@ Rules:
 
     const count = parsed.items ? parsed.items.length : 0;
     scanStatus.className   = 'scan-status success';
-    scanStatus.textContent = `✓ Found ${count} item${count !== 1 ? 's' : ''}! Check the details below and tap Save.`;
+    scanStatus.textContent = `✓ Found ${count} item${count !== 1 ? 's' : ''}! Review and tap Save.`;
 
   } catch (err) {
     scanStatus.className   = 'scan-status error';
-    scanStatus.textContent = '⚠️ ' + (err.message || 'Something went wrong. Try again.');
+    scanStatus.textContent = '⚠️ ' + (err.message || 'Something went wrong. Try again or fill in manually.');
   } finally {
     scanBtn.disabled    = false;
     scanBtn.textContent = '✨ Scan Receipt with AI';
