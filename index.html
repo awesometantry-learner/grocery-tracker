@@ -18,6 +18,7 @@
       <button class="header-back" id="headerBack" style="display:none">&#8592;</button>
       <h1 class="header-title" id="headerTitle">Grocery Tracker</h1>
       <button class="header-btn" id="headerBtn" style="display:none"></button>
+      <button class="header-settings" id="settingsBtn" title="Settings">&#9881;</button>
     </header>
 
     <div id="views">
@@ -63,6 +64,10 @@
             </div>
             <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
             <input type="file" id="galleryInput" accept="image/*" style="display:none">
+            <button type="button" class="btn-scan" id="scanBtn" style="display:none">
+              &#10024; Scan Receipt with AI
+            </button>
+            <div id="scanStatus" style="display:none" class="scan-status"></div>
           </div>
 
           <div class="card">
@@ -151,6 +156,36 @@
       <div class="modal-handle"></div>
       <button class="modal-close" id="modalClose" aria-label="Close">&#10005;</button>
       <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsModal" class="modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-overlay" id="settingsOverlay"></div>
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <button class="modal-close" id="settingsClose" aria-label="Close">&#10005;</button>
+      <h2 class="modal-store" style="margin-bottom:6px">Settings</h2>
+      <p style="font-size:14px;color:#6b7280;margin-bottom:20px">Enter your Anthropic API key to enable automatic receipt scanning.</p>
+
+      <div class="form-group">
+        <label for="apiKeyInput">Anthropic API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." autocomplete="off">
+        <p class="settings-hint">Your key is saved only on this device and never shared anywhere.</p>
+      </div>
+
+      <button class="btn-primary btn-save" id="saveApiKeyBtn">Save Key</button>
+
+      <div class="settings-howto">
+        <p class="howto-title">How to get a free API key:</p>
+        <ol class="howto-steps">
+          <li>Go to <strong>console.anthropic.com</strong></li>
+          <li>Sign up / log in</li>
+          <li>Click <strong>API Keys</strong> in the left menu</li>
+          <li>Click <strong>Create Key</strong>, copy it, paste above</li>
+        </ol>
+        <p class="howto-cost">Cost: scanning one receipt costs roughly &#8377;0.10 — very cheap.</p>
+      </div>
     </div>
   </div>
 

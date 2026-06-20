@@ -273,6 +273,8 @@ async function startAddTrip(editId = null) {
   document.getElementById('tripTotal').value = '';
   document.getElementById('itemsList').innerHTML = '';
   setPhotoPreview(null);
+  document.getElementById('scanBtn').style.display    = 'none';
+  document.getElementById('scanStatus').style.display = 'none';
   updateItemsEmpty();
 
   // Populate autocomplete lists
@@ -290,7 +292,11 @@ async function startAddTrip(editId = null) {
     document.getElementById('tripStore').value = trip.store  || '';
     document.getElementById('tripTotal').value = trip.total  || '';
 
-    if (trip.photo) { S.photo = trip.photo; setPhotoPreview(trip.photo); }
+    if (trip.photo) {
+      S.photo = trip.photo;
+      setPhotoPreview(trip.photo);
+      document.getElementById('scanBtn').style.display = 'block';
+    }
     items.forEach(it => addItemRow(it));
     updateItemsEmpty();
   }
@@ -631,6 +637,147 @@ async function confirmDelete(tripId) {
 }
 
 // ================================================================
+// SETTINGS  (API key stored in localStorage)
+// ================================================================
+function getApiKey() {
+  return localStorage.getItem('anthropic_api_key') || '';
+}
+
+function setupSettings() {
+  document.getElementById('settingsBtn').onclick = openSettings;
+  document.getElementById('settingsClose').onclick = closeSettings;
+  document.getElementById('settingsOverlay').onclick = closeSettings;
+  document.getElementById('saveApiKeyBtn').onclick = () => {
+    const key = document.getElementById('apiKeyInput').value.trim();
+    if (!key) { toast('Please paste your API key first'); return; }
+    localStorage.setItem('anthropic_api_key', key);
+    closeSettings();
+    toast('API key saved ✓');
+  };
+}
+
+function openSettings() {
+  document.getElementById('apiKeyInput').value = getApiKey();
+  document.getElementById('settingsModal').style.display = 'flex';
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+
+// ================================================================
+// AI RECEIPT SCANNING
+// ================================================================
+async function scanReceipt() {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    openSettings();
+    toast('Add your API key first to enable scanning');
+    return;
+  }
+
+  const scanBtn    = document.getElementById('scanBtn');
+  const scanStatus = document.getElementById('scanStatus');
+
+  scanBtn.disabled    = true;
+  scanBtn.textContent = '⏳ Reading your receipt…';
+  scanStatus.className    = 'scan-status scanning';
+  scanStatus.textContent  = '✨ AI is reading your receipt — this takes about 10 seconds…';
+  scanStatus.style.display = 'block';
+
+  try {
+    const base64 = S.photo.split(',')[1];
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
+            },
+            {
+              type: 'text',
+              text: `Look at this grocery receipt and extract all the information. Return ONLY a valid JSON object — no explanation, no markdown, just raw JSON — in this exact format:
+{
+  "store": "store name as written on receipt, or null",
+  "date": "date in YYYY-MM-DD format, or null",
+  "total": total bill amount as a number without currency symbol or null,
+  "items": [
+    {
+      "name": "item name in plain English",
+      "quantity": quantity as a number or null,
+      "unit": one of kg/g/litre/ml/pcs/pack/dozen/bunch,
+      "pricePerUnit": price per unit as a number or null
+    }
+  ]
+}
+Rules:
+- All prices must be plain numbers (no ₹ or Rs symbols)
+- For items sold by weight (e.g. Tomato 0.5kg @ ₹40/kg), set quantity=0.5, unit=kg, pricePerUnit=40
+- For items sold as pieces (e.g. 2 soaps @ ₹30 each), set quantity=2, unit=pcs, pricePerUnit=30
+- If you cannot read something clearly, use null
+- Today's date context: ${today()}`
+            }
+          ]
+        }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.error?.message || `Error ${res.status}`;
+      if (res.status === 401) throw new Error('Invalid API key. Please check it in Settings.');
+      throw new Error(msg);
+    }
+
+    const data = await res.json();
+    const text = data.content[0].text.trim();
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Could not read the receipt clearly. Try a clearer photo.');
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Fill in the form
+    if (parsed.store) document.getElementById('tripStore').value = parsed.store;
+    if (parsed.date)  document.getElementById('tripDate').value  = parsed.date;
+    if (parsed.total) document.getElementById('tripTotal').value = parsed.total;
+
+    document.getElementById('itemsList').innerHTML = '';
+    if (parsed.items && parsed.items.length) {
+      parsed.items.forEach(it => addItemRow({
+        displayName:  it.name,
+        quantity:     it.quantity,
+        unit:         it.unit || 'pcs',
+        pricePerUnit: it.pricePerUnit,
+      }));
+    }
+    updateItemsEmpty();
+
+    const count = parsed.items ? parsed.items.length : 0;
+    scanStatus.className   = 'scan-status success';
+    scanStatus.textContent = `✓ Found ${count} item${count !== 1 ? 's' : ''}! Check the details below and tap Save.`;
+
+  } catch (err) {
+    scanStatus.className   = 'scan-status error';
+    scanStatus.textContent = '⚠️ ' + (err.message || 'Something went wrong. Try again.');
+  } finally {
+    scanBtn.disabled    = false;
+    scanBtn.textContent = '✨ Scan Receipt with AI';
+  }
+}
+
+// ================================================================
 // PHOTO HANDLERS
 // ================================================================
 function setupPhoto() {
@@ -642,6 +789,10 @@ function setupPhoto() {
     const compressed = await compressPhoto(file);
     S.photo = compressed;
     setPhotoPreview(compressed);
+    // Show scan button if API key is set
+    document.getElementById('scanBtn').style.display = 'block';
+    document.getElementById('scanStatus').style.display = 'none';
+    document.getElementById('scanStatus').textContent = '';
   };
 
   document.getElementById('cameraBtn').onclick  = () => photoInput.click();
@@ -652,9 +803,13 @@ function setupPhoto() {
   document.getElementById('removePhotoBtn').onclick = () => {
     S.photo = null;
     setPhotoPreview(null);
-    photoInput.value  = '';
+    photoInput.value   = '';
     galleryInput.value = '';
+    document.getElementById('scanBtn').style.display    = 'none';
+    document.getElementById('scanStatus').style.display = 'none';
   };
+
+  document.getElementById('scanBtn').onclick = scanReceipt;
 
   photoInput.onchange   = e => handle(e.target.files[0]);
   galleryInput.onchange = e => handle(e.target.files[0]);
@@ -716,6 +871,9 @@ async function init() {
 
   // Photo
   setupPhoto();
+
+  // Settings
+  setupSettings();
 
   // SW
   registerSW();
