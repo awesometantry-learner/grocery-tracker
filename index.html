@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#16a34a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GroceryTrack">
+  <title>Grocery Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <button class="header-back" id="headerBack" style="display:none">&#8592;</button>
+      <h1 class="header-title" id="headerTitle">Grocery Tracker</h1>
+      <button class="header-btn" id="headerBtn" style="display:none"></button>
+    </header>
+
+    <div id="views">
+      <!-- HOME -->
+      <section id="view-home" class="view active">
+        <div class="home-stats">
+          <div class="stat-card">
+            <span class="stat-value" id="monthTotal">&#8377;0</span>
+            <span class="stat-label">This Month</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="monthTrips">0</span>
+            <span class="stat-label">Trips</span>
+          </div>
+        </div>
+        <div class="add-trip-cta" id="addTripBtn">
+          <div class="add-trip-icon">&#128722;</div>
+          <div>
+            <div class="add-trip-title">Add Shopping Trip</div>
+            <div class="add-trip-sub">Tap to record today's groceries</div>
+          </div>
+          <span class="add-trip-arrow">&#8250;</span>
+        </div>
+        <h2 class="section-title">Recent Trips</h2>
+        <div id="recentTrips" class="trips-list"></div>
+      </section>
+
+      <!-- ADD / EDIT TRIP -->
+      <section id="view-trip" class="view">
+        <form id="tripForm" autocomplete="off">
+          <div class="card">
+            <div class="photo-area" id="photoArea">
+              <img id="photoPreview" style="display:none" alt="Receipt">
+              <div class="photo-placeholder" id="photoPlaceholder">
+                <span class="photo-icon">&#128247;</span>
+                <span>Tap to add receipt photo</span>
+              </div>
+            </div>
+            <div class="photo-actions">
+              <button type="button" class="btn-secondary" id="cameraBtn">&#128247; Camera</button>
+              <button type="button" class="btn-secondary" id="galleryBtn">&#128444; Gallery</button>
+              <button type="button" class="btn-secondary btn-remove-photo" id="removePhotoBtn" style="display:none">&#10006; Remove</button>
+            </div>
+            <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+            <input type="file" id="galleryInput" accept="image/*" style="display:none">
+          </div>
+
+          <div class="card">
+            <div class="form-group">
+              <label for="tripDate">Date</label>
+              <input type="date" id="tripDate" required>
+            </div>
+            <div class="form-group">
+              <label for="tripStore">Store / Shop Name</label>
+              <input type="text" id="tripStore" placeholder="e.g. Reliance Fresh, DMart, Local Market" list="storeList" autocomplete="off">
+              <datalist id="storeList"></datalist>
+            </div>
+            <div class="form-group">
+              <label for="tripTotal">Total Bill Amount (&#8377;)</label>
+              <input type="number" id="tripTotal" placeholder="0.00" step="0.01" min="0">
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="items-header">
+              <h3>Items Purchased</h3>
+              <button type="button" class="btn-add-item" id="addItemBtn">+ Add Item</button>
+            </div>
+            <div id="itemsList"></div>
+            <div class="items-empty" id="itemsEmpty">No items added yet. Tap "+ Add Item" to start.</div>
+          </div>
+
+          <button type="submit" class="btn-primary btn-save" id="saveBtn">Save Trip</button>
+        </form>
+      </section>
+
+      <!-- HISTORY -->
+      <section id="view-history" class="view">
+        <div class="search-bar">
+          <input type="text" id="historySearch" placeholder="&#128269; Search by store or date...">
+        </div>
+        <div id="historyList" class="trips-list"></div>
+      </section>
+
+      <!-- COMPARE -->
+      <section id="view-compare" class="view">
+        <div class="compare-intro">
+          <h2 class="section-title">Price History</h2>
+          <p class="compare-desc">Search any item to see how its price has changed over time.</p>
+        </div>
+        <div class="compare-search">
+          <input type="text" id="compareSearch" placeholder="e.g. tomato, milk, onion..." list="compareList" autocomplete="off">
+          <datalist id="compareList"></datalist>
+          <button id="compareBtn" class="btn-primary">Search</button>
+        </div>
+        <div id="compareResult" class="compare-result" style="display:none">
+          <div class="chart-card">
+            <canvas id="priceChart"></canvas>
+          </div>
+          <div id="compareSummary" class="compare-summary"></div>
+          <div id="compareTable" class="compare-table"></div>
+        </div>
+        <div id="compareEmpty" class="compare-empty">
+          <div class="compare-hint">&#128202;</div>
+          <p>Your tracked items will appear here as chips so you can quickly compare prices.</p>
+          <div id="suggestedItems" class="suggested-items"></div>
+        </div>
+      </section>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-view="home">
+        <span class="nav-icon">&#127968;</span>
+        <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-item" data-view="history">
+        <span class="nav-icon">&#128203;</span>
+        <span class="nav-label">History</span>
+      </button>
+      <button class="nav-item" data-view="compare">
+        <span class="nav-icon">&#128202;</span>
+        <span class="nav-label">Compare</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- TRIP DETAIL MODAL -->
+  <div id="tripModal" class="modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-overlay" id="modalOverlay"></div>
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <button class="modal-close" id="modalClose" aria-label="Close">&#10005;</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- ITEM ROW TEMPLATE -->
+  <template id="itemTemplate">
+    <div class="item-row">
+      <div class="item-top-row">
+        <input type="text" class="item-name" placeholder="Item name (e.g. Tomato)" list="itemSuggestions" autocomplete="off">
+        <button type="button" class="item-remove" aria-label="Remove item">&#10006;</button>
+      </div>
+      <div class="item-bottom-row">
+        <div class="item-field">
+          <label>Qty</label>
+          <input type="number" class="item-qty" placeholder="1" step="0.001" min="0">
+        </div>
+        <div class="item-field">
+          <label>Unit</label>
+          <select class="item-unit">
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="l">litre</option>
+            <option value="ml">ml</option>
+            <option value="pcs" selected>pcs</option>
+            <option value="dozen">dozen</option>
+            <option value="pack">pack</option>
+            <option value="bunch">bunch</option>
+          </select>
+        </div>
+        <div class="item-field">
+          <label>Price / unit (&#8377;)</label>
+          <input type="number" class="item-price" placeholder="0.00" step="0.01" min="0">
+        </div>
+      </div>
+    </div>
+  </template>
+  <datalist id="itemSuggestions"></datalist>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
