@@ -701,7 +701,7 @@ Return ONLY a valid JSON object with no explanation, no markdown, just raw JSON 
 Rules: all prices as plain numbers (no ₹/Rs). For weight items (Tomato 0.5kg @ ₹40/kg) use quantity=0.5, unit=kg, pricePerUnit=40. For piece items (2 soaps @ ₹30) use quantity=2, unit=pcs, pricePerUnit=30. Use null if unclear. Date context: ${today()}`;
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
